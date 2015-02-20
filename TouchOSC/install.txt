@@ -1,0 +1,6 @@
+
+We recommend the TouchOSC app to control BROBOT. This is a not a free app but is cheap and works great!
+It´s available for IOS and Android.
+
+TouchOSC has a layout editor for PC. Download and install from http://hexler.net/software/touchosc (go down to the download section)
+Open the layout BROBOT.touchosc on the editor and follow the instructions to send the layout to your Smartphone/table using your wifi network.

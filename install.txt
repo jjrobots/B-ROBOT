@@ -1,0 +1,25 @@
+
+- Install the Arduino IDE on your PC from (skip this step if you have arduino already installed)
+This code has been tested and developed on IDE version 1.0.5
+
+- Install the libraries
+Copy the folders inside the /libraries into the Arduino/libraries folder on your hard drive
+JJROBOTS_BROBOT
+JJROBOTS_OSC
+I2Cdev
+MPU6050
+
+- Copy the main code. 
+Copy the /BROBOT folder to your prefered sketch folder
+
+- Compile and send the code
+Open your Arduino IDE
+Open the main code in /BROBOT/BROBOT.ino
+Connect your Leonardo board with the USB to the PC
+Note: If this is the first time you connect a Leonardo board to your PC maybe you will need to install the driver.
+       Please follow the instructions on Arduino help
+Select the board as Leonardo (tools->board)
+Select the serial port that appears on the tools->Serial port
+Send the code to the board
+
+Have fun! 
