@@ -9,5 +9,7 @@ This is the new and improved version of this old project:
 Blog: http://cienciaycacharreo.blogspot.com.es/2013/10/b-robot-un-robot-equilibrista-impreso_28.html
 
 To install code read the install.txt instructions
+
+JJROBOTS 2015. Science & fun!
        
       
