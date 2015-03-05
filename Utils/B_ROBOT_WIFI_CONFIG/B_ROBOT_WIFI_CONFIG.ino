@@ -25,7 +25,8 @@ void setup()
   Serial.println("Wifi configuration...");  // CONFIGURATION ONLY NEEDED FIRST TIME
   JJWIFI.WifiChangeBaudRateFast();
   JJWIFI.WifiEnableTCPUDP("2222","2223","192.168.1.11"); // Port 2222
-  JJWIFI.WifiAP("JJROBOTS3");    // Soft AP mode SSID:"JJROBOTS", you could change the name...
+  JJWIFI.WifiAP("JJROBOTS","12345678");    // Soft AP mode SSID:"JJROBOTS" pass "12345678", you could change the name...
+										   // The password only works for modules with firmware 4.41 or above
   
   delay(2000);
   Serial.println();

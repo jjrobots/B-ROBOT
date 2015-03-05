@@ -19,7 +19,7 @@ class JJWIFI_Class
     void WifiSetIP(char ip[], char netmask[], char gateway[]);
     void WifiEnableUDP(char local_port[], char remote_port[], char remote[]);
 	void WifiEnableTCPUDP(char local_port[], char remote_port[], char remote[]);
-    void WifiAP(char ssidname[]);
+    void WifiAP(char ssidname[],char passphrase[]);
 	void WifiViewConfig();
 };
 

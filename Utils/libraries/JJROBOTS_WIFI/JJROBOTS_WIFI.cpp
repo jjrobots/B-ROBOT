@@ -190,13 +190,19 @@ void JJWIFI_Class::WifiViewConfig()
   WifiExitCommandMode();
 }
 
-void JJWIFI_Class::WifiAP(char ssidname[])
+void JJWIFI_Class::WifiAP(char ssidname[], char passphrase[])
 {
   WifiEnterCommandMode();
   WifiSendCommand("set wlan join 7");
+  // Old firmwares
   WifiSendCommand("set wlan ssid ",false);
   WifiSendCommand(ssidname);
   WifiSendCommand("set wlan chan 1");
+  // Compatibility with firmware 4.41 Soft AP with WPA2 security
+  WifiSendCommand("set apmode ssid ",false);
+  WifiSendCommand(ssidname);
+  WifiSendCommand("set apmode passphrase ",false);
+  WifiSendCommand(passphrase);
   WifiSendCommand("set ip address 192.168.1.1");
   WifiSendCommand("set ip netmask 255.255.255.0");
   WifiSendCommand("set ip dhcp 4");   // DHCP server
