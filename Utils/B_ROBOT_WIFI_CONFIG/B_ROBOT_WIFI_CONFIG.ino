@@ -36,12 +36,20 @@ void setup()
   Serial.println("END!!");
   Serial.println("The module should be ready to use!");
   Serial.println();
+  Serial.println("ECHO MODE (to test)");
 }
 
 
 // MAIN LOOP
 void loop() 
-{ 
+{
+  char incomingByte;
+
+  // ECHO from module (to test)
+  while (Serial1.available() > 0) {
+    incomingByte = Serial1.read();
+    Serial.print(incomingByte);
+  }
 }
 
 
