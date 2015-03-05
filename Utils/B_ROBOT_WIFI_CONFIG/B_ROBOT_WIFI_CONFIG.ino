@@ -44,12 +44,18 @@ void setup()
 void loop() 
 {
   char incomingByte;
+  char incomingByte2;
 
   // ECHO from module (to test)
+  // Bidirectional (to check or configure module)
   while (Serial1.available() > 0) {
     incomingByte = Serial1.read();
     Serial.print(incomingByte);
   }
+  while (Serial.available() > 0) {
+    incomingByte2 = Serial.read();
+    Serial1.print(incomingByte2);
+    }
 }
 
 
