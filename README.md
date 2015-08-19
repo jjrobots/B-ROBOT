@@ -1,6 +1,7 @@
 JJROBOTS B-ROBOT
 =================
 Self Balancing Arduino robot. Control via Smartphone/Tablet. Fully 3D printed parts.
+New: This new version include support for the new V2 board! (with integrated ESP wifi module)
 
 All the documentation, features, how it works, build manuals and SHOP here:
 URL: http://jjrobots.com/b-robot
