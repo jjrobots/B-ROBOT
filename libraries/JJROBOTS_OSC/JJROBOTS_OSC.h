@@ -3,6 +3,12 @@
 
 #include "Arduino.h"
 
+int Serial1_available(void);
+unsigned char Serial1_read(void);
+void Serial1_write(uint8_t c);
+void Serial1_print(const char str[]);
+void Serial1_println(const char str[]);
+void Serial1_flush();
 
 class JJROBOTS_OSC_Class
 {

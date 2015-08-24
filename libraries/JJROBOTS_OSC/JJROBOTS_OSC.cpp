@@ -98,6 +98,35 @@ unsigned char Serial1_read(void)
   }
 }
 
+// Write to serial1 (without interrupts)
+void Serial1_write(uint8_t c)
+{
+  while (!((UCSR1A) & (1 <<UDRE1)))
+    ;
+  UDR1 = c;
+}
+
+void Serial1_flush()
+{
+ rx_bufferS1.head = rx_bufferS1.tail;
+}
+
+// This are simplified versions of print and println (only for strings)
+void Serial1_print(const char str[])
+{
+	while (*str)
+		Serial1_write(*str++);
+}
+
+void Serial1_println(const char str[])
+{
+	while (*str)
+		Serial1_write(*str++);
+	Serial1_write('\r');
+	Serial1_write('\n');
+}
+
+
 void Serial1_begin(unsigned long baud)
 {
   uint16_t baud_setting;
