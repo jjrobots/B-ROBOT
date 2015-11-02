@@ -2,6 +2,8 @@
 	JJROBOTS_BROBOT.cpp -  Library for JJROBOTS BROBOT board.
 	Code by Jose Julio and Juan Pedro. JJROBOTS.COM
 	This library lets you control the servos of the board
+   
+   Updated: 25/10/2015. Support for new v2.1 board (new servo2 pin)
 
 	This library is free software; you can redistribute it and/or
     modify it under the terms of the GNU Lesser General Public
@@ -41,7 +43,7 @@ void BROBOT_Class::initServo()
   // Initialize Timer4 as Fast PWM
   TCCR4A = (1<<PWM4A)|(1<<PWM4B);
   TCCR4B = 0;
-  TCCR4C = 0;
+  TCCR4C = (1<<PWM4D);
   TCCR4D = 0;
   TCCR4E = (1<<ENHC4); // Enhaced -> 11 bits
 
@@ -60,11 +62,12 @@ void BROBOT_Class::initServo()
   // OC4A = PC7 (Pin13)  OC4B = PB6 (Pin10)   OC4D = PD7 (Pin6)
   // Set pins as outputs
   DDRB |= (1 << 6);  // OC4B = PB6 (Pin10 on Leonardo board)
-  DDRC |= (1 << 7);
-  // DDRD |= (1 << 7);
+  DDRC |= (1 << 7);  // OC4A = PC7 (Pin13 on Leonardo board)
+  DDRD |= (1 << 7);  // OC4D = PD7 (Pin6 on Leonardo board)
 
-  //Enable OC4B output
+  //Enable OC4A and OC4B and OCR4D output
   TCCR4A |= (1<<COM4B1)|(1<<COM4A1); 
+  TCCR4C |= (1<<COM4D1);
   // set prescaler to 256 and enable timer    16Mhz/256/1024 = 61Hz (16.3ms)
   TCCR4B = (1 << CS43)|(1 << CS40);
 
@@ -83,7 +86,8 @@ void BROBOT_Class::moveServo2(int pwm)
   pwm = constrain(pwm,servo_min_pwm,servo_max_pwm)>>3;  // Check max values and Resolution: 8us
   // 11 bits => 3 MSB bits on TC4H, LSB bits on OCR4B
   TC4H = pwm>>8;
-  OCR4A = pwm & 0xFF;
+  OCR4A = pwm & 0xFF;  // Old 2.0 boards servo2 output
+  OCR4D = pwm & 0xFF;  // New 2.1 boards servo2 output
 }
 
 // output : Battery voltage*10 (aprox) and noise filtered

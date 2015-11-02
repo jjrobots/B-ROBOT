@@ -15,10 +15,10 @@
     version 2.1 of the License, or (at your option) any later version.
 
     OSC Messages read:  OSC: /page/command parameters
-             FADDER (1,2,3,4)  Ex: /1/fader1  f,  XXXX  => lenght:20, Param:  float (0.0-1.0)
-             XY (1,2)          Ex: /1/xy1 f,f,    XXXXXXXX => length: ?? Params: float,float (0.0-1.0)
-             PUSH (1,2,3,4)    Ex: /1/push1  f,  XXXX => length:20
-             TOGGLE (1,2,3,4)
+             FADDER (1,2,3,4)  Ex: /1/fader1   f,  XXXX  => lenght:20, Param:  float (0.0-1.0)
+             XY (1,2)          Ex: /1/xy1  f,f,    XXXXXXXX => length: 24 Params: float,float (0.0-1.0)
+             PUSH (1,2,3,4)    Ex: /1/push1    f,  XXXX => length:20 Param: float
+             TOGGLE (1,2,3,4)  Ex: /1/toggle1  f,  XXXX => length:20 Param: floar
     OSC Message send:
             string to send   (NOT WORKING YET!)
     
@@ -46,7 +46,7 @@
 
 // We reescribe the ISR for USART1
 // Same definitions as in HardwareSerial.cpp
-#define SERIAL_BUFFER_SIZE 64
+#define SERIAL_BUFFER_SIZE 128
 
 struct ring_buffer
 {
@@ -192,9 +192,10 @@ JJROBOTS_OSC_Class::JJROBOTS_OSC_Class()
 
 // Public Methods //////////////////////////////////////////////////////////////
 // This function lets us send simple one param messages (float param)
+// No overflow check!
 void JJROBOTS_OSC_Class::MsgSend(char *c,unsigned char msgSize, float p)
 {
-
+   uint8_t i;
 union{
   unsigned char Buff[4];
   float d;
@@ -202,13 +203,12 @@ union{
 
   // We copy the param in the last 4 bytes
   u.d = p;
-  c[msgSize-4] = u.Buff[0];
-  c[msgSize-3] = u.Buff[1];
-  c[msgSize-2] = u.Buff[2];
-  c[msgSize-1] = u.Buff[3];
-  // We send the message
-  //for (i=0;i< msgSize;i++)
-  //Serial1.write((const uint8_t *)c,msgSize);
+  c[msgSize-4] = u.Buff[3];
+  c[msgSize-3] = u.Buff[2];
+  c[msgSize-2] = u.Buff[1];
+  c[msgSize-1] = u.Buff[0];
+  for (i=0;i< msgSize;i++)
+    Serial1_write((uint8_t)c[i]);
 }
 
 
@@ -258,9 +258,13 @@ void JJROBOTS_OSC_Class::MsgRead()
     // We look for an OSC message start like /x/
     if ((UDPBuffer[0] == '/')&&(UDPBuffer[2] == '/')){
       if (readStatus == 0){
-	    page = UDPBuffer[1] - '0';  // Convert page to int
+	     page = UDPBuffer[1] - '0';  // Convert page to int
         readStatus = 1;
+        touchMessage = 0;
         //Serial.print("$");
+       #ifdef DEBUG3
+        Serial.println();
+       #endif
       }
       else{
         readStatus = 1;
@@ -395,12 +399,21 @@ void JJROBOTS_OSC_Class::MsgRead()
         return;
       } // end toggle
     } else if (readStatus==2){
+      if ((UDPBuffer[1] == '/')&&(UDPBuffer[0] == 'z')){  // Touch up message? (/z) [only on page1]
+         if ((page == 1)&&(commandType<=2)){    // Touchup message only on Fadder1 and Fadder2
+            touchMessage = 1;
+            }
+         else{
+            touchMessage = 0;
+            readStatus = 0; //Finish
+            }  
+         }
       readCounter--;   // Reading counter until we reach the Parameter position
       if (readCounter<=0){
         readStatus=3;
         value = extractParamFloat1();
         readStatus=0;
-		if ((value<0.0)||(value>1.0))
+		  if ((value<0.0)||(value>1.0))
             {
             Serial.println("!ERR:f1!");
             return;
@@ -418,6 +431,10 @@ void JJROBOTS_OSC_Class::MsgRead()
         switch (commandType){
           case 1:
             fadder1 = value;
+            if ((touchMessage)&&(value==0)){
+               fadder1=0.5;
+               MsgSend("/1/fader1\0\0\0,f\0\0\0\0\0\0",20,0.5);
+               }
 			#ifdef DEBUG 
                 Serial.print("$F1:");
 				Serial.println(fadder1);
@@ -425,6 +442,10 @@ void JJROBOTS_OSC_Class::MsgRead()
             break;
           case 2:
             fadder2 = value;
+            if ((touchMessage)&&(value==0)){
+               fadder2=0.5;
+               MsgSend("/1/fader2\0\0\0,f\0\0\0\0\0\0",20,0.5);
+               }
 			#ifdef DEBUG
                 Serial.print("$F2:");
 				Serial.println(fadder2);
@@ -544,9 +565,9 @@ void JJROBOTS_OSC_Class::MsgRead()
 				Serial.println((int)toggle4);
 			#endif
             break;
-        }
-      }
-    }
+        } // switch
+      }  // if (Read_counter<=0)
+    }  // if (read_status==2)
   }  // end Serial.available()
 }
 

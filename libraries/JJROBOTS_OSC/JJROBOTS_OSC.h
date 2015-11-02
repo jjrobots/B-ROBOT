@@ -20,6 +20,7 @@ class JJROBOTS_OSC_Class
     unsigned char readCounter;
     unsigned char readNumParams;
     unsigned char commandType;
+    unsigned char touchMessage;
 
     //char OSC_led1[21]="/1/led1\x00,f\x00\x00\x00\x00\x00\x00"; // Message for LED1
     //char OSC_led1[21] = {'/','1','/','l','e','d','1','\0',',','f','\0','\0','\0','\0','\0','\0'};
