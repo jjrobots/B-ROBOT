@@ -1,15 +1,21 @@
 // B-ROBOT  SELF BALANCE ARDUINO ROBOT WITH STEPPER MOTORS
-// JJROBOTS BROBOT KIT: (Arduino Leonardo + BROBOT ELECTRONIC BRAIN + STEPPER MOTOR drivers)
-// This code is prepared for new BROBOT shield V2 with ESP8266 Wifi module
+// JJROBOTS BROBOT KIT: (Arduino Leonardo + BROBOT ELECTRONIC BRAIN v2 + STEPPER MOTOR drivers)
+// This code is prepared for new BROBOT shield v2.0 with ESP8266 Wifi module
+// You need to install libraries JJROBOTS_OSC, JJROBOTS_BROBOT, I2Cdev and MPU6050 (from Github repository)
 // Author: JJROBOTS.COM (Jose Julio & Juan Pedro)
 // Date: 02/09/2014
-// Updated: 19/08/2015
-// Version: 2.1
+// Updated: 26/10/2015
+// Version: 2.21
 // License: GPL v2
 // Project URL: http://jjrobots.com/b-robot (Features,documentation,build instructions,how it works, SHOP,...)
+// New updates:
+//   - New default parameters specially tuned for BROBOT EVO version
+//   - Support for TouchMessages(/z). Main controls resets when user lift the fingers
+//   - BROBOT sends the battery status to the interface
+//   Remember to update the libraries and install the new TouchOSC layout
+//  Thanks to our users on the forum for the new ideas. Specially sasa999, KomX, ... 
 
 // The board needs at least 10-15 seconds with no motion (robot steady) at beginning to give good values...
-// The robot moves the wheels slightly when it´s ready to go!
 // MPU6050 IMU using internal DMP processor. Connected via I2C bus
 // Angle calculations and control part is running at 200Hz from DMP solution
 // DMP is using the gyro_bias_no_motion correction method.
@@ -32,12 +38,11 @@
 //    fader1: Throttle (0.0-1.0) OSC message: /1/fader1
 //    fader2: Steering (0.0-1.0) OSC message: /1/fader2
 //    push1: Move servo arm (and robot raiseup) OSC message /1/push1 [OPTIONAL]
-//    push2: Center sticks => Throttle neutral, steering netral
+//    if you enable the touchMessage on TouchOSC options, controls return to center automatically when you lift your fingers
 //    toggle1: Enable PRO mode. On PRO mode steering and throttle are more aggressive
 //    PAGE2: PID adjustements [optional][don´t touch if you don´t know what you are doing...;-) ]
 
-// New WIFI ESP8266 Module(V2 board). Comment next line if you are using the old Wifi module (RN-171)
-#define WIFI_ESP   
+#define WIFI_ESP   // New WIFI ESP8266 Module. Comment this line if you are using the old Wifi module (RN-171)
 
 #include <JJROBOTS_OSC.h>
 #include <JJROBOTS_BROBOT.h>
@@ -47,24 +52,24 @@
 // This version optimize the FIFO (only contains quaternion) and minimize code size
 
 // NORMAL MODE PARAMETERS (MAXIMUN SETTINGS)
-#define MAX_THROTTLE 480
-#define MAX_STEERING 130
+#define MAX_THROTTLE 580
+#define MAX_STEERING 150
 #define MAX_TARGET_ANGLE 12
 
 // PRO MODE = MORE AGGRESSIVE (MAXIMUN SETTINGS)
-#define MAX_THROTTLE_PRO 680
+#define MAX_THROTTLE_PRO 980 //680
 #define MAX_STEERING_PRO 250
-#define MAX_TARGET_ANGLE_PRO 20
+#define MAX_TARGET_ANGLE_PRO 40 //20
 
 // Default control terms
-#define KP 0.19 // 0.20 0.22        
-#define KD 30   // 26  30 28        
-#define KP_THROTTLE 0.07    //0.065 0.08
-#define KI_THROTTLE 0.04   //0.05
+#define KP 0.19         
+#define KD 28           
+#define KP_THROTTLE 0.07    
+#define KI_THROTTLE 0.04   
 
 // Control gains for raiseup (the raiseup movement requiere special control parameters)
 #define KP_RAISEUP 0.16
-#define KD_RAISEUP 40
+#define KD_RAISEUP 36
 #define KP_THROTTLE_RAISEUP 0   // No speed control on raiseup
 #define KI_THROTTLE_RAISEUP 0.0
 
@@ -76,10 +81,11 @@
 #define SERVO_MAX_PULSEWIDTH 2600
 
 // Battery management [optional]. This is not needed for alkaline or Ni-Mh batteries but usefull for if you use lipo batteries
-#define BATTERY_WARNING 110    // (11 volts) aprox
-#define BATTERY_SHUTDOWN 100   // (10.0 volts)
-#define BATTERY_CHECK 0                // 0: No  check, 1: check
-#define SHUTDOWN_WHEN_BATTERY_OFF 0    // 0: Not used, 1: Robot will shutdown when battery is off (_CHECK SHOULD BE 1)
+#define BATTERY_CHECK 1                // 0: No  check, 1: check (send message to interface)
+#define LIPOBATT 0             // Default 0: No Lipo batt 1: Lipo batt (to adjust battery monitor range)
+#define BATTERY_WARNING 105    // (10.5 volts) aprox [for lipo batts, disable by default]
+#define BATTERY_SHUTDOWN 95   // (9.5 volts) [for lipo batts]
+#define SHUTDOWN_WHEN_BATTERY_OFF 0    // 0: Not used, 1: Robot will shutdown when battery is off (BATTERY_CHECK SHOULD BE 1)
 
 #define DEBUG 0   // 0 = No debug info (default)
 
@@ -87,11 +93,11 @@
 #define SET(x,y) (x|=(1<<y))
 
 #define ZERO_SPEED 65535
-#define MAX_ACCEL 7        // Maximun motor acceleration (MAX RECOMMENDED VALUE: 8??) (default:7)
+#define MAX_ACCEL 7        // Maximun motor acceleration (MAX RECOMMENDED VALUE: 8) (default:7)
 
 #define MICROSTEPPING 16   // 8 or 16 for 1/8 or 1/16 driver microstepping (default:16)
 
-#define I2C_SPEED 400000L  // 400kHz I2C speed
+#define I2C_SPEED 400000L  // 400kHz I2C speed 
 
 #define RAD2GRAD 57.2957795
 #define GRAD2RAD 0.01745329251994329576923690768489
@@ -114,6 +120,7 @@ Quaternion q;
 
 uint8_t loop_counter;       // To generate a medium loop 40Hz
 uint8_t slow_loop_counter;  // slow loop 2Hz
+uint8_t sendBattery_counter; // To send battery status
 
 long timer_old;
 long timer_value;
@@ -199,7 +206,7 @@ float stabilityPDControl(float DT, float input, float setPoint,  float Kp, float
   // Kd is implemented in two parts
   //    The biggest one using only the input (sensor) part not the SetPoint input-input(t-2)
   //    And the second using the setpoint to make it a bit more agressive   setPoint-setPoint(t-1)
-  output = Kp * error + (Kd * (setPoint - setPointOld) - Kd * (input - PID_errorOld2)) / DT; // + error - PID_error_Old2
+  output = Kp * error + (Kd * (setPoint - setPointOld) - Kd * (input - PID_errorOld2)) / DT;
   //Serial.print(Kd*(error-PID_errorOld));Serial.print("\t");
   PID_errorOld2 = PID_errorOld;
   PID_errorOld = input;  // error for Kd is only the input component
@@ -422,43 +429,6 @@ void readControlParameters()
 }
 
 #ifdef WIFI_ESP
-/*
-// Wait for OK or ER message from Wifi module
-int waitforOK(uint8_t timeout_secs)
-{
-  bool OK_received = false;
-  char c1, c2;
-  bool timeout = false;
-  long timer_init;
-  long timer;
-
-  timer_init = millis();
-  while (!timeout) {
-    timer = millis();
-    if (((timer - timer_init) / 1000) > timeout_secs) // Timeout?
-      timeout=true;
-    if (Serial1_available()) {
-      c2 = c1;
-      c1 = Serial1_read();
-      Serial.print(c1);
-      if ((c2 == 'O') && (c1 == 'K')) {
-        Serial.println();
-        Serial1_flush();
-        OK_received = true;
-        return 1;  // Ok
-      }
-      if ((c2 == 'O') && (c1 == 'R')) {   // ERROR
-        Serial.println();
-        Serial1_flush();
-        OK_received = true;
-        return 0;  // Error
-      }
-    }
-  }
-  Serial.println("Timeout!");
-  return -1;  // timeout
-}
-*/
 
 int ESPwait(String stopstr, int timeout_secs)
 {
@@ -574,11 +544,11 @@ void setup()
   TWCR = 1 << TWEN;
 
 #if DEBUG > 0
-  delay(7000);
+  delay(9000);
 #else
-  delay(1000);
+  delay(2000);
 #endif
-  Serial.println("BROBOT by JJROBOTS v2.1");
+  Serial.println("BROBOT by JJROBOTS v2.2");
   Serial.println("Initializing I2C devices...");
   //mpu.initialize();
   // Manual MPU initialization... accel=2G, gyro=2000º/s, filter=20Hz BW, output=200Hz
@@ -619,6 +589,9 @@ void setup()
   Serial.println("Initalizing ESP Wifi Module...");
   Serial.println("WIFI RESET");
   Serial1_flush();
+  Serial1_print("+++");  // To ensure we exit the transparent transmision mode
+  delay(100);
+  ESPsendCommand("AT","OK",1);
   ESPsendCommand("AT+RST", "OK", 2); // ESP Wifi module RESET
   ESPwait("ready", 6);
   ESPsendCommand("AT+GMR", "OK", 5);
@@ -640,7 +613,10 @@ void setup()
   Serial.println("Start UDP server at port 2222");
   ESPsendCommand("AT+CIPMUX=0", "OK", 3);  // Single connection mode
   ESPsendCommand("AT+CIPMODE=1", "OK", 3); // Transparent mode
-  ESPsendCommand("AT+CIPSTART=\"UDP\",\"0\",2223,2222,0", "OK", 3);
+  //ESPsendCommand("AT+CIPSTART=\"UDP\",\"0\",2223,2222,0", "OK", 3);
+  ESPsendCommand("AT+CIPSTART=\"UDP\",\"192.168.4.2\",2223,2222,0", "OK", 3);
+  delay(250);
+  ESPsendCommand("AT+CIPSEND",">",2);  // Start transmission (transparent mode)
   delay(5000);   // Time to settle things... the bias_from_no_motion algorithm needs some time to take effect and reset gyro bias.
 #else
   delay(10000);   // Time to settle things... the bias_from_no_motion algorithm needs some time to take effect and reset gyro bias.
@@ -731,10 +707,7 @@ void loop()
     if (OSC.page == 1)  // Get commands from user (PAGE1 are user commands: throttle, steering...)
     {
       OSC.newMessage = 0;
-      if ((OSC.fadder1 > 0.45) && (OSC.fadder1 < 0.55)) // Small deadband on throttle
-        throttle = 0;
-      else
-        throttle = (OSC.fadder1 - 0.5) * max_throttle;
+      throttle = (OSC.fadder1 - 0.5) * max_throttle;
       // We add some exponential on steering to smooth the center band
       steering = OSC.fadder2 - 0.5;
       if (steering > 0)
@@ -796,7 +769,6 @@ void loop()
     Serial.println(mode);
 #endif
 
-    //angle_adjusted_radians = angle_adjusted*GRAD2RAD;
 #if DEBUG==1
     Serial.println(angle_adjusted);
 #endif
@@ -810,7 +782,7 @@ void loop()
 
     int16_t angular_velocity = (angle_adjusted - angle_adjusted_Old) * 90.0; // 90 is an empirical extracted factor to adjust for real units
     int16_t estimated_speed = -actual_robot_speed_Old - angular_velocity;     // We use robot_speed(t-1) or (t-2) to compensate the delay
-    estimated_speed_filtered = estimated_speed_filtered * 0.95 + (float)estimated_speed * 0.05;
+    estimated_speed_filtered = estimated_speed_filtered * 0.95 + (float)estimated_speed * 0.05;  // low pass filter on estimated speed
 
 #if DEBUG==2
     Serial.print(" ");
@@ -818,8 +790,6 @@ void loop()
 #endif
     // SPEED CONTROL: This is a PI controller.
     //    input:user throttle, variable: estimated robot speed, output: target robot angle to get the desired speed
-    //target_angle = (target_angle + speedPControl(estimated_speed_filtered,throttle,Kp_thr))/2.0;   // Some filtering : Average with previous output
-    //target_angle = target_angle*0.3 + speedPIControl(dt,estimated_speed_filtered,throttle,Kp_thr,Ki_thr)*0.7;   // Some filtering
     target_angle = speedPIControl(dt, estimated_speed_filtered, throttle, Kp_thr, Ki_thr);
     target_angle = constrain(target_angle, -max_target_angle, max_target_angle); // limited output
 
@@ -845,7 +815,7 @@ void loop()
     motor2 = constrain(motor2, -MAX_CONTROL_OUTPUT, MAX_CONTROL_OUTPUT);
 
     // NOW we send the commands to the motors
-    if ((angle_adjusted < 74) && (angle_adjusted > -74)) // Is robot ready (upright?)
+    if ((angle_adjusted < 76) && (angle_adjusted > -76)) // Is robot ready (upright?)
     {
       // NORMAL MODE
       digitalWrite(4, LOW);  // Motors enable
@@ -854,7 +824,13 @@ void loop()
 
       // Push1 Move servo arm
       if (OSC.push1)  // Move arm
-        BROBOT.moveServo1(SERVO_MIN_PULSEWIDTH + 100);
+        {
+        // Update to correct bug when the robot is lying backward
+        if (angle_adjusted > -40)
+          BROBOT.moveServo1(SERVO_MIN_PULSEWIDTH + 100);
+        else
+          BROBOT.moveServo1(SERVO_MAX_PULSEWIDTH + 100);
+        }
       else
         BROBOT.moveServo1(SERVO_AUX_NEUTRO);
 
@@ -866,7 +842,7 @@ void loop()
       }
 
       // Normal condition?
-      if ((angle_adjusted < 40) && (angle_adjusted > -40))
+      if ((angle_adjusted < 45) && (angle_adjusted > -45))
       {
         Kp = Kp_user;            // Default user control gains
         Kd = Kd_user;
@@ -926,31 +902,41 @@ void loop()
   {
     slow_loop_counter = 0;
     // Read  status
+#if BATTERY_CHECK==1
+    int BatteryValue = BROBOT.readBattery();
+    sendBattery_counter++;
+    if (sendBattery_counter>=10){ //Every 5 seconds we send a message
+      sendBattery_counter=0;
+#if LIPOBATT==0
+      // From >10.6 volts (100%) to 9.2 volts (0%) (aprox)
+      float value = constrain((BatteryValue-92)/14.0,0.0,1.0);
+#else
+      // For Lipo battery use better this config: (From >11.5v (100%) to 9.5v (0%)
+      float value = constrain((BatteryValue-95)/20.0,0.0,1.0);
+#endif
+      //Serial.println(value);
+      OSC.MsgSend("/1/rotary1\0\0,f\0\0\0\0\0\0",20,value);
+      }
+    //if (Battery_value < BATTERY_WARNING){
+    //  Serial.print("LOW BAT!! ");
+    //  }
+#endif   // BATTERY_CHECK
 #if DEBUG==6
     Serial.print("B:");
-    Serial.println(BROBOT.readBattery());
+    Serial.println(BatteryValue);
 #endif
-#if BATTERY_CHECK==1
-    BROBOT.readBattery();
-    if (BROBOT.battery < BATTERY_SHUTDOWN)
+#if SHUTDOWN_WHEN_BATTERY_OFF==1
+
+    if (BROBOT.readBattery(); < BATTERY_SHUTDOWN)
     {
       // Robot shutdown !!!
-#if SHUTDOWN_WHEN_BATTERY_OFF==1
       Serial.println("LOW BAT!! SHUTDOWN");
       Robot_shutdown = true;
       // Disable steppers
       digitalWrite(4, HIGH);  // Disable motors
+    }
 #endif
-    }
-    else if (BROBOT.battery < BATTERY_WARNING)
-    {
-      // Battery warning
-      // What to do here???
-      Serial.print("LOW BAT!! ");
-      Serial.println(BROBOT.battery);
-      //moveServo(SERVO_AUX_NEUTRO+300);  // Move arm?
-    }
-#endif   // BATTERY_CHECK
+
   }  // End of slow loop
 }
 
