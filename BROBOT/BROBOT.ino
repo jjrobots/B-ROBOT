@@ -927,7 +927,7 @@ void loop()
 #endif
 #if SHUTDOWN_WHEN_BATTERY_OFF==1
 
-    if (BROBOT.readBattery(); < BATTERY_SHUTDOWN)
+    if (BROBOT.readBattery() < BATTERY_SHUTDOWN)
     {
       // Robot shutdown !!!
       Serial.println("LOW BAT!! SHUTDOWN");
